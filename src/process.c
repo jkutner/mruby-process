@@ -1,5 +1,5 @@
 /*
-** process.c - 
+** process.c -
 */
 
 #include "mruby.h"
@@ -191,6 +191,43 @@ mrb_f_sleep(mrb_state *mrb, mrb_value klass)
 }
 
 mrb_value
+mrb_f_exec(mrb_state *mrb, mrb_value klass)
+{
+  int ret, i;
+  mrb_value *argv, pname;
+  const char *path;
+  mrb_int argc;
+  void (*chfunc)(int);
+
+  fflush(stdout);
+  fflush(stderr);
+
+  mrb_get_args(mrb, "*", &argv, &argc);
+  if (argc == 0) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "wrong number of arguments");
+  }
+
+  pname = argv[0];
+  path = mrb_string_value_cstr(mrb, &pname);
+
+  char **pargv = malloc((argc + 1) * sizeof(void*));
+  for (i = 0; i < argc; i++) {
+    pargv[i] = mrb_string_value_cstr(mrb, &argv[i]);
+  }
+  pargv[argc] = NULL;
+
+  chfunc = signal(SIGCHLD, SIG_DFL);
+  ret = execv(path, pargv);
+  signal(SIGCHLD, chfunc);
+
+  if (WIFEXITED(ret) && WEXITSTATUS(ret) == 0) {
+    return mrb_true_value();
+  }
+
+  return mrb_false_value();
+}
+
+mrb_value
 mrb_f_system(mrb_state *mrb, mrb_value klass)
 {
   int ret;
@@ -355,6 +392,7 @@ mrb_mruby_process_gem_init(mrb_state *mrb)
   mrb_define_method(mrb, mrb->kernel_module, "fork",   mrb_f_fork,   MRB_ARGS_NONE());
   mrb_define_method(mrb, mrb->kernel_module, "sleep",  mrb_f_sleep,  MRB_ARGS_ANY());
   mrb_define_method(mrb, mrb->kernel_module, "system", mrb_f_system, MRB_ARGS_ANY());
+  mrb_define_method(mrb, mrb->kernel_module, "exec", mrb_f_exec, MRB_ARGS_ANY());
 
   p = mrb_define_module(mrb, "Process");
   mrb_define_class_method(mrb, p, "kill",    mrb_f_kill,    MRB_ARGS_ANY());
